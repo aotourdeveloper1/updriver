@@ -22,7 +22,6 @@ use App\Models\Centrosdecosto;
 use App\Models\Traslado;
 use App\Models\Tarifa;
 use App\Models\Conductor;
-use Hash;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
