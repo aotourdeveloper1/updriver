@@ -22,6 +22,7 @@ use App\Models\Centrosdecosto;
 use App\Models\Traslado;
 use App\Models\Tarifa;
 use App\Models\Conductor;
+use Hash;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -60,11 +61,11 @@ Route::post('/login', function (Request $request) {
 
             }else{
         
-                $user->tokens()->delete();
+                //$user->tokens()->delete();
 
                 $token = $user->createToken('auth_token')->plainTextToken;
 
-                Auth::logoutOtherDevices($request->password);
+                //Auth::logoutOtherDevices($request->password);
                 
                 $update = DB::table('conductores')
                 ->where('id' , $user->id)
@@ -75,7 +76,8 @@ Route::post('/login', function (Request $request) {
                 $conductor = Conductor::find($user->id);
 
                 return Response::json([
-                    'response' => $token,
+                    'response' => true,
+                    'token' => $token,
                     'acceso' => true,
                     'id_usuario' => Auth::user()->id,
                     'conductor' => $conductor
@@ -95,6 +97,53 @@ Route::post('/login', function (Request $request) {
     
 });
 
+Route::post('/crearconductor', function (Request $request) {
+
+    $driver = DB::table('conductores')
+    ->where('email', $request->email)
+    ->first();
+
+    if($driver) {
+
+        return Response::json([
+            'response' => false,
+            'id_conductor' => $driver->id,
+            'message' => 'El correo digitado ya está tomado por: '.$driver->primer_nombre.' '.$driver->primer_apellido
+        ]);
+
+    }else{
+
+        $driver = DB::table('conductores')
+        ->where('numero_documento', $request->cedula)
+        ->first();
+
+        if($driver) {
+
+            $conductor = DB::table('conductores')
+            ->where('numero_documento', $request->cedula)
+            ->update([
+                'email' => $request->email,
+                'password' => Hash::make($request->cedula)
+            ]);
+
+            return Response::json([
+                'response' => true,
+                'password' => Hash::make($request->cedula)
+            ]);
+
+        }else{
+
+            return Response::json([
+                'response' => false,
+                'message' => 'La cédula ingresada no existe'
+            ]);
+
+        }
+
+    }
+
+});
+
 Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('auth/logout', [AuthController::class, 'logout']);
@@ -102,8 +151,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     //Viajes
     Route::post('v1/viajesporentendido', [ViajesController::class, 'viajesporentendido']);
     Route::post('v1/proximosviajes', [ViajesController::class, 'proximosviajes']);
-    Route::post('v1/servicioentendido', [ViajesController::class, 'servicioentendido']);
+    Route::post('v1/viajeentendido', [ViajesController::class, 'viajeentendido']);
     Route::post('v1/listarpasajeros', [ViajesController::class, 'listarpasajeros']);
+    Route::post('v1/listarpasajerosejecutivos', [ViajesController::class, 'listarpasajerosejecutivos']);
     Route::post('v1/escanearqr', [ViajesController::class, 'escanearqr']);
     Route::post('v1/iniciarviaje', [ViajesController::class, 'iniciarviaje']);
     Route::post('v1/viajeactivo', [ViajesController::class, 'viajeactivo']);
@@ -119,6 +169,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('v1/descargarconstancia', [ViajesController::class, 'descargarconstancia']);
     Route::post('v1/pasajerorecogido', [ViajesController::class, 'pasajerorecogido']);
     Route::post('v1/finalizarviaje', [ViajesController::class, 'finalizarviaje']);
+    Route::post('v1/obtenerconductor', [ViajesController::class, 'obtenerconductor']);
+    Route::post('v1/guardaridregistration', [ViajesController::class, 'guardaridregistration']);
+    Route::post('v1/notificaciones', [ViajesController::class, 'notificaciones']);
+    Route::post('v1/listarnotificaciones', [ViajesController::class, 'listarnotificaciones']);
+    Route::post('v1/tracker', [ViajesController::class, 'tracker']);
+    Route::post('v1/gps', [ViajesController::class, 'gps']);
+    Route::post('v1/listartiposnovedades', [ViajesController::class, 'listartiposnovedades']);
+    Route::post('v1/contactos', [ViajesController::class, 'contactos']);
 
 
 

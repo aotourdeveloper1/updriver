@@ -19,6 +19,28 @@ use Hash;
 class ViajesController extends Controller
 {
 
+    public function guardaridregistration(Request $request) {
+
+        $id = $request->conductor_id;
+        $registration_id = $request->registrationid;
+        $device = $request->device;
+
+        $registration = DB::table('conductores')
+        ->where('id', $id)
+        ->update([
+            'idregistrationdevice' => $registration_id,
+            'device' => $device
+        ]);
+
+
+        return Response::json([
+            'response' => true,
+            'registrationid' => $registration_id,
+            'version' => 1
+        ]);
+
+    }
+
     public function viajesporentendido(Request $request) {
 
         $id = intval($request->id);
@@ -46,7 +68,9 @@ class ViajesController extends Controller
         v.tipo_ruta,
         t2.nombre as tipo_de_ruta,
         t2.codigo as codigo_tipo_ruta,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos
+        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
+        (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
+        (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
         FROM
             viajes v
         left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
@@ -55,8 +79,10 @@ class ViajesController extends Controller
         left join estados est on est.id = v.fk_estado 
         left join tipos t on t.id = v.tipo_traslado 
         left join tipos t2 on t2.id = v.tipo_ruta
-        WHERE `fk_conductor` = ".$id." AND v.fecha_viaje between '".$diaanterior."' and '".$diasiguiente."' AND v.fk_estado = 57 and v.estado_eliminacion is null and v.estado_papelera is null
+        WHERE `fk_conductor` = ".$id." AND v.fecha_viaje between '".$diaanterior."' and '".$diasiguiente."' AND v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
+
+        //v.fk_estado = 57 and
 
         $viajes = DB::select($consulta);
 
@@ -93,7 +119,8 @@ class ViajesController extends Controller
         }else{
 
             return Response::json([
-                'response' => false
+                'response' => false,
+                'servicios' => $viajes,
             ]);
 
         }
@@ -115,18 +142,29 @@ class ViajesController extends Controller
 		v.id,
 		v.fk_estado,
 		v.detalle_recorrido,
-		v.fecha_viaje,
-		v.hora_viaje,
+		v.fecha_viaje as fecha_servicio,
+		v.hora_viaje as hora_servicio,
         c.razonsocial,  
         est.nombre as nombre_estado,
         est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos
+        v.tipo_traslado,
+        t.nombre as nombre_tipo_traslado,
+        t.codigo as codigo_tipo_traslado,
+        v.tipo_ruta,
+        t2.nombre as tipo_de_ruta,
+        t2.codigo as codigo_tipo_ruta,
+        v.recoger_pasajero,
+        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
+        (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
+        (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
         FROM
             viajes v
         left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
         left join destinos d on d.fk_viaje = v.id 
         -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
         left join estados est on est.id = v.fk_estado 
+        left join tipos t on t.id = v.tipo_traslado 
+        left join tipos t2 on t2.id = v.tipo_ruta
         WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje between '".$diaanterior."' and '".$diasiguiente."' AND v.fk_estado = 58 and v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
 
@@ -156,14 +194,15 @@ class ViajesController extends Controller
         }else{
 
             return Response::json([
-                'response' => false
+                'response' => false,
+                'viajes' => $viajes,
             ]);
 
         }
 
     }
 
-    public function servicioentendido(Request $request) {
+    public function viajeentendido(Request $request) {
 
         $id = $request->viaje_id;
 
@@ -183,7 +222,32 @@ class ViajesController extends Controller
 
         $viaje_id = $request->viaje_id;
 
-        $pasajeros = "SELECT pr.nombre, pr.celular, pr.direccion, pr.barrio, pr.localidad, pr.estado_ruta, t.nombre as nombre_estado FROM pasajeros_rutas_qr pr left join tipos t on t.id = pr.estado_ruta where fk_viaje = ".$viaje_id."";
+        $pasajeros = "SELECT pr.id, pr.nombre, pr.celular, pr.direccion, pr.barrio, pr.localidad, pr.estado_ruta, t.nombre as nombre_estado, pr.recoger_a as sw, pr.location FROM pasajeros_rutas_qr pr left join tipos t on t.id = pr.estado_ruta where fk_viaje = ".$viaje_id."";
+        $pasajeros = DB::select($pasajeros);
+
+        if (count($pasajeros)){
+
+            return Response::json([
+                'response' => true,
+                'usuarios' => $pasajeros
+            ]);
+
+        }else{
+
+            return Response::json([
+                'response' => false,
+                'usuarios' => $pasajeros
+            ]);
+
+        }
+
+    }
+
+    public function listarpasajerosejecutivos(Request $request) {
+
+        $viaje_id = $request->viaje_id;
+
+        $pasajeros = "SELECT nombre, celular FROM pasajeros_ejecutivos where fk_viaje = ".$viaje_id."";
         $pasajeros = DB::select($pasajeros);
 
         if (count($pasajeros)){
@@ -396,6 +460,85 @@ class ViajesController extends Controller
 
     }
 
+    public function tracker(Request $request) {
+
+        $id = $request->viaje_id;
+
+        $latitude =  substr($request->latitude, 0, 10);
+        $longitude = substr($request->longitude, 0, 10);
+        $speed = substr(($request->speed)*3.6, 0, 8);
+
+        //Objeto array json
+        $objArray = null;
+
+        //Array a insertar en json
+        $array = [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'speed' => $speed,
+            'timestamp' => date('Y-m-d H:i:s')
+        ];
+
+        $gps = DB::table('gps')
+        ->where('fk_viaje', $id)
+        ->first();
+
+        if($latitude!=null) {
+
+            if (!$gps) { //primer tracking
+
+                $gps = new Gps;
+                $gps->fk_viaje = $id;
+                $gps->coordenadas = json_encode([$array]);
+
+                $gps->save();
+
+                return Response::json([
+                    'response' => true
+                ]);
+
+            }else{
+
+                $objArray = json_decode($gps->coordenadas);
+                array_push($objArray, $array);
+
+                $gps = DB::table('gps')
+                ->where('fk_viaje', $id)
+                ->update([
+                    'coordenadas' => json_encode($objArray)
+                ]);
+
+                return Response::json([
+                    'response' => true
+                ]);
+
+            }
+
+
+            /*if ($servicio->app_user_id!=null) {
+
+                $user_id = $servicio->app_user_id;
+
+                $channel = 'aotour_mobile_client_user_'.$user_id;
+                $name = 'servicio_activo';
+
+                $data = json_encode([
+                'ultima_ubicacion' => [
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                ],
+                'servicio_id' => $id,
+                'estado_servicio_app' => $servicio->estado_servicio_app
+                ]);
+
+                //Viaje::enviarNotificacionPusher($channel, $name, $data);
+
+            }*/
+        
+        }
+
+    }
+
     public function viajeactivo(Request $request) {
 
         $id = intval($request->id);
@@ -411,20 +554,31 @@ class ViajesController extends Controller
 		v.id,
 		v.fk_estado,
 		v.detalle_recorrido,
-		v.fecha_viaje,
-		v.hora_viaje,
+		v.fecha_viaje as fecha_servicio,
+		v.hora_viaje as hora_servicio,
         c.razonsocial,  
         est.nombre as nombre_estado,
         est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos
+        v.tipo_traslado,
+        t.nombre as nombre_tipo_traslado,
+        t.codigo as codigo_tipo_traslado,
+        v.tipo_ruta,
+        v.recoger_pasajero,
+        t2.nombre as tipo_de_ruta,
+        t2.codigo as codigo_tipo_ruta,
+        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
+        (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
+        (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
         FROM
             viajes v
         left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
         left join destinos d on d.fk_viaje = v.id 
         -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
         left join estados est on est.id = v.fk_estado 
+        left join tipos t on t.id = v.tipo_traslado 
+        left join tipos t2 on t2.id = v.tipo_ruta
         WHERE `fk_conductor` = ".$id." AND v.fecha_viaje between '".$diaanterior."' and '".$diasiguiente."' AND v.fk_estado = 59 and v.estado_eliminacion is null and v.estado_papelera is null
-        GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
+        GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc limit 1";
 
         $viajes = DB::select($consulta);
 
@@ -432,7 +586,7 @@ class ViajesController extends Controller
 
             return Response::json([
                 'response' => true,
-                'viajes' => $viajes,
+                'viajes' => $viajes[0],
                 'conductor_id' => $id
             ]);
 
@@ -452,7 +606,7 @@ class ViajesController extends Controller
         $viaje_id = $request->viaje_id;
         $nombreConductor = $request->nombre_conductor;
 
-        $usuario = usuarioRutaQr::find($id);
+        $usuario = PasajeroRutaQr::find($id);
         $usuario->recoger_a = 1;
         $usuario->save();
 
@@ -507,7 +661,7 @@ class ViajesController extends Controller
     public function esperaejecutivo(Request $request) {
 
         $viaje_id = $request->viaje_id;
-        $nombreConductor = $request->nombre_conductor;
+        $nombreCond = $request->nombre_conductor;
 
         $viaje = Viaje::find($viaje_id);
         $viaje->recoger_pasajero = 0;
@@ -519,7 +673,7 @@ class ViajesController extends Controller
                 $notifications = Viaje::Enespera($viaje_id, $viaje->app_user_id);
             }else if($viaje->tipo_traslado!=70){
 
-                $pax = "select id, nombre, indicativo, celular, correo from pasajeros_ejecutivos where fk_viaje = ".$id."";
+                $pax = "select id, nombre, indicativo, celular, correo from pasajeros_ejecutivos where fk_viaje = ".$viaje_id."";
                 $paxs = DB::select($pax);
 
                 foreach ($paxs as $pass) {
@@ -529,7 +683,7 @@ class ViajesController extends Controller
 
                         $numero = $pass->celular;
                         
-                        $nombreConductor = explode(' ', $nombreConductor);
+                        $nombreConductor = explode(' ', $nombreCond);
                         
                         $cond = DB::table('conductores')
                         ->select('id', 'celular')
@@ -595,7 +749,7 @@ class ViajesController extends Controller
         $id = $request->id;
         $nombreConductor = $request->nombre_conductor;
 
-        $usuario = usuarioRutaQr::find($id);
+        $usuario = PasajeroRutaQr::find($id);
         $usuario->recoger_a = 0;
         $usuario->save();
 
@@ -705,13 +859,24 @@ class ViajesController extends Controller
         c.razonsocial,  
         est.nombre as nombre_estado,
         est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos
+        v.tipo_traslado,
+        t.nombre as nombre_tipo_traslado,
+        t.codigo as codigo_tipo_traslado,
+        v.tipo_ruta,
+        t2.nombre as tipo_de_ruta,
+        t2.codigo as codigo_tipo_ruta,
+        v.recoger_pasajero,
+        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
+        (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
+        (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
         FROM
             viajes v
         left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
         left join destinos d on d.fk_viaje = v.id 
         -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
         left join estados est on est.id = v.fk_estado 
+        left join tipos t on t.id = v.tipo_traslado 
+        left join tipos t2 on t2.id = v.tipo_ruta
         WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje = '".$fecha."' AND v.fk_estado = 60 and v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
 
@@ -727,7 +892,8 @@ class ViajesController extends Controller
         }else{
 
             return Response::json([
-                'response' => false
+                'response' => false,
+                'viajes' => $viajes
             ]);
 
         }
@@ -738,28 +904,42 @@ class ViajesController extends Controller
 
         $conductor_id = $request->conductor_id;
         $mes = $request->mes;
+        
+        $meses = explode('-', $mes);
 
-        $ano = date('Y');
+        $ano = $meses[0];
+        $mes = $meses[1];
 
-        $fechaInicial = $mes.'-01';
-        $fechaFinal = $mes.'-31';
+        $fechaInicial = $ano.'-'.$mes.'-01';
+        $fechaFinal =  $ano.'-'.$mes.'-31';
 
         $consulta = "SELECT
 		v.id,
 		v.fk_estado,
 		v.detalle_recorrido,
-		v.fecha_viaje,
-		v.hora_viaje,
+		v.fecha_viaje as fecha_servicio,
+		v.hora_viaje as hora_servicio,
         c.razonsocial,  
         est.nombre as nombre_estado,
         est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos
+        v.tipo_traslado,
+        t.nombre as nombre_tipo_traslado,
+        t.codigo as codigo_tipo_traslado,
+        v.tipo_ruta,
+        t2.nombre as tipo_de_ruta,
+        t2.codigo as codigo_tipo_ruta,
+        v.recoger_pasajero,
+        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
+        (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
+        (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
         FROM
             viajes v
         left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
         left join destinos d on d.fk_viaje = v.id 
         -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
         left join estados est on est.id = v.fk_estado 
+        left join tipos t on t.id = v.tipo_traslado 
+        left join tipos t2 on t2.id = v.tipo_ruta
         WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje between '".$fechaInicial."' AND '".$fechaFinal."' AND v.fk_estado = 60 and v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
 
@@ -775,7 +955,8 @@ class ViajesController extends Controller
         }else{
 
             return Response::json([
-                'response' => false
+                'response' => false,
+                'viajes' => $viajes
             ]);
 
         }
@@ -987,11 +1168,13 @@ class ViajesController extends Controller
 
     }
 
+    //..validar el código de recogida de pasajero
     public function pasajerorecogido(Request $request) {
 
         $viaje_id = $request->viaje_id;
         $latitude = $request->latitude;
         $longitude = $request->longitude;
+        $codigo = $request->codigo;
 
         $viaje = Viaje::find($viaje_id);
 
@@ -1079,9 +1262,41 @@ class ViajesController extends Controller
             }
             //Notificación a los usuarios recogidos que nos dirigimos al lugar de destino
 
+            $consulta = "SELECT
+            v.id,
+            v.fk_estado,
+            v.detalle_recorrido,
+            v.fecha_viaje as fecha_servicio,
+            v.hora_viaje as hora_servicio,
+            c.razonsocial,  
+            est.nombre as nombre_estado,
+            est.codigo as codigo_estado,
+            v.tipo_traslado,
+            t.nombre as nombre_tipo_traslado,
+            t.codigo as codigo_tipo_traslado,
+            v.tipo_ruta,
+            t2.nombre as tipo_de_ruta,
+            t2.codigo as codigo_tipo_ruta,
+            v.recoger_pasajero,
+            JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
+            (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
+            (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
+            FROM
+                viajes v
+            left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
+            left join destinos d on d.fk_viaje = v.id 
+            -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
+            left join estados est on est.id = v.fk_estado 
+            left join tipos t on t.id = v.tipo_traslado 
+            left join tipos t2 on t2.id = v.tipo_ruta
+            WHERE v.id = ".$viaje_id." 
+            GROUP BY v.id";
+
+            $viajes = DB::select($consulta);
+
             return Response::json([
                 'response' => true,
-                'viaje' => $viaje
+                'viaje' => $viajes[0]
             ]);
 
         }
@@ -1315,1236 +1530,25 @@ class ViajesController extends Controller
         }
 
     }
-    
 
+    public function obtenerconductor(Request $request) {
 
+        $id = $request->conductor_id;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    public function createtrip(Request $request) {
-
-        $viajes = $request->viajes;
-
-        $actualDate = date('Y-m-d');
-        $actualTime = date('H:i');
-
-        for ($a=0; $a < count($viajes); $a++){
-
-            $horaMaxima = date('H:i',strtotime('+30 minute',strtotime($viajes[$a]['hora_viaje'])));
-
-            $viaje = new Viaje;
-
-            $code = "";
-            $characters = array_merge(range('0','9'));
-            $max = count($characters) - 1;
-            for ($o = 0; $o < 2; $o++) {
-                $rand = mt_rand(0, $max);
-                $code .= $characters[$rand];
-            }
-
-            $viaje->fk_centrodecosto = $request->centrodecosto;
-            $viaje->fk_subcentrodecosto = $request->subcentrodecosto;
-
-            if ($request->user_id!=null) {
-                $viaje->app_user_id = $request->user_id;
-            }
-
-            $ciudad = DB::table('ciudades')->where('id',$request->ciudad)->first();
-            $viaje->fk_departamento = $ciudad->fk_departamento;
-            $viaje->fk_ciudad = $request->ciudad;
-            $viaje->solicitante = $request->solicitante;
-            $viaje->email_solicitante = $request->email_solicitante;
-            $viaje->celular_solicitante = $request->celular_solicitante;
-            $viaje->fk_sede = $request->sede;
-            $viaje->fecha_solicitud = date('Y-m-d');
-
-            $viaje->tipo_servicio = 44;
-
-            $viaje->fk_traslado = $viajes[$a]['traslado'];
-
-            $viaje->detalle_recorrido = $viajes[$a]['detalle_recorrido'];
-
-            $conductor = DB::table('conductores')->where('id',$viajes[$a]['conductor'])->first();
-            $viaje->fk_proveedor = $conductor->fk_proveedor;
-
-            $viaje->fk_conductor = $viajes[$a]['conductor'];
-            $viaje->fk_vehiculo = $viajes[$a]['vehiculo'];
-
-            $viaje->fecha_viaje = $viajes[$a]['fecha_viaje'];
-            $viaje->hora_viaje = $viajes[$a]['hora_viaje'];
-
-            if( $viajes[$a]['vuelo']!=null ) {
-                $viaje->vuelo = $viajes[$a]['vuelo'];
-            }
-
-            $viaje->creado_por = Auth::user()->id;
-            
-            if( $viajes[$a]['expediente']!=null ) {
-                $viaje->expediente = $viajes[$a]['expediente'];
-            }
-            
-            if( Auth::user()->id_perfil == 8 ){
-                $viaje->control_facturacion = 1;
-            }
-            $viaje->fk_estado = 57;
-
-            $viaje->save();
-
-            $destinos = $viajes[$a]['destino'];
-            
-            $trayecto = '';
-
-            for ($i=0; $i < count($destinos); $i++){
-
-                //Guardar los destinos del viaje START FOREACH
-                $destino = new Destino;
-                $destino->direccion = $destinos[$i]['direccion'];
-                $destino->coordenadas = json_encode([
-                    'latitude' => $destinos[$i]['latitude'],
-                    'longitude' => $destinos[$i]['longitude']
-                ]);
-                $destino->fk_viaje = $viaje->id;
-                $destino->orden = $i+1;
-                $destino->save();
-
-                $trayecto = $trayecto.$destinos[$i]['direccion'].' | ';
-
-                //Guardar los destinos del viaje END FOREACH
-
-            }
-
-            $pasajeros = $viajes[$a]['pasajeros'];
-
-            for ($i=0; $i < count($pasajeros); $i++){
-                
-                //Guardar los pasajeros del viaje START - FOREACH
-                $pasajero = new PasajeroEjecutivo;
-                $pasajero->nombre = $pasajeros[$i]['nombre'];
-                $pasajero->indicativo = $pasajeros[$i]['indicativo'];
-                $pasajero->celular = $pasajeros[$i]['celular'];
-                $pasajero->correo = $pasajeros[$i]['correo'];
-                $pasajero->fk_viaje = $viaje->id;
-                $pasajero->save();
-                //Guardar los pasajeros del viaje END
-
-                if($actualDate<=$viajes[$a]['fecha_viaje']){
-
-                    if($actualTime<=$horaMaxima){
-
-                        if($pasajeros[$i]['celular']!=null){
-
-                            $vehiculo = DB::table('vehiculos')->where('id',$viaje->fk_vehiculo)->first();
-                            $conductor = DB::table('conductores')->where('id',$viaje->fk_conductor)->first();
-
-                            $number = intval($pasajeros[$i]['indicativo'].$pasajeros[$i]['celular']);
-
-                            $nombre = $conductor->primer_nombre;
-
-                            $fecha = $viaje->fecha_viaje;
-                            $hora = $viaje->hora_viaje;
-
-                            $cliente = DB::table('centrosdecosto')->where('id',$request->centrodecosto)->pluck('razonsocial');
-
-                            if($vehiculo->placa=='ABC-123'){
-                                $placaVehiculo = 'POR CONFIRMAR';
-                            }else{
-                                $placaVehiculo = $vehiculo->placa;
-                            }
-
-                            $res = Viaje::notificarViajeEjecutivo($number, $pasajero->nombre, $fecha, $hora, $nombre, $placaVehiculo, $trayecto, $viaje->id);
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-            //si la fecha y la hora actuales son menores a la fecha y hora del servicio
-            if($actualDate<=$viajes[$a]['fecha_viaje']){
-
-                if($actualTime<=$horaMaxima){
-                    $number = rand(10000000, 99999999);
-                    $res2 = Viaje::notificarConductor($viaje->fk_conductor, $viaje->fecha_viaje, $viaje->hora_viaje, $number, $viaje->id);
-                }
-
-            }
-
-            //Parte REVERSO
-            if($viajes[$a]['reverso']==1) { 
-                
-                $viaje = new Viaje;
-
-                $code = "";
-                $characters = array_merge(range('0','9'));
-                $max = count($characters) - 1;
-                for ($o = 0; $o < 2; $o++) {
-                    $rand = mt_rand(0, $max);
-                    $code .= $characters[$rand];
-                }
-
-                $viaje->fk_centrodecosto = $request->centrodecosto;
-                $viaje->fk_subcentrodecosto = $request->subcentrodecosto;
-
-                if ($request->user_id!=null) {
-                    $viaje->app_user_id = $request->user_id;
-                }
-
-                $ciudad = DB::table('ciudades')->where('id',$request->ciudad)->first();
-                $viaje->fk_departamento = $ciudad->fk_departamento;
-                $viaje->fk_ciudad = $request->ciudad;
-                $viaje->solicitante = $request->solicitante;
-                $viaje->email_solicitante = $request->email_solicitante;
-                $viaje->celular_solicitante = $request->celular_solicitante;
-                
-                $viaje->fecha_solicitud = date('Y-m-d');
-                $viaje->tipo_servicio = 44;
-
-                //$viaje->resaltar = $resaltarArray[$i]; //pending
-                //$viaje->pago_directo = $pago_directoArray[$i]; //pending
-                //$viaje->codigo_viaje = $code; //pending
-                //$viaje->cantidad = Input::get('cantidad'); //pending
-                $viaje->fk_sede = $request->sede;
-
-                $viaje->fk_traslado = $viajes[$a]['traslado'];
-
-                $viaje->detalle_recorrido = $viajes[$a]['detalle_recorrido'];
-
-                $conductor = DB::table('conductores')->where('id',$viajes[$a]['conductor'])->first();
-                $viaje->fk_proveedor = $conductor->fk_proveedor;
-
-                $viaje->fk_conductor = $viajes[$a]['conductor'];
-                $viaje->fk_vehiculo = $viajes[$a]['vehiculo'];
-
-                $viaje->fecha_viaje = $viajes[$a]['fechados']; //$request->fechados;
-                $viaje->hora_viaje = $viajes[$a]['horados'];
-
-                if( $viajes[$a]['vuelo']!=null ) {
-                    $viaje->vuelo = $viajes[$a]['vuelo'];
-                }
-
-                $viaje->creado_por = Auth::user()->id;
-                
-                if( $viajes[$a]['expediente']!=null ) {
-                    $viaje->expediente = $viajes[$a]['expediente'];
-                }
-                
-                if( Auth::user()->id_perfil == 8 ){
-                    $viaje->control_facturacion = 1;
-                }
-                $viaje->fk_estado = 57;
-
-                $viaje->save();
-
-                $destinos = $viajes[$a]['destinodos'];
-
-                //for ($i=0; $i < count($destinos); $i++){
-                
-                $conta = 0;
-                
-                for ($i=0; $i < count($destinos); $i++){
-
-                    //Guardar los destinos del viaje START FOREACH
-                    $destino = new Destino;
-                    $destino->direccion = $destinos[$i]['direccion'];
-                    $destino->coordenadas = json_encode([
-                        'latitude' => $destinos[$i]['latitude'],
-                        'longitude' => $destinos[$i]['longitude']
-                    ]);
-                    $destino->fk_viaje = $viaje->id;
-                    $destino->orden = $i+1;
-                    $destino->save();
-                    //Guardar los destinos del viaje END FOREACH
-
-                }
-
-                $pasajeros = $viajes[$a]['pasajeros'];
-
-                for ($i=0; $i < count($pasajeros); $i++){
-                    
-                    //Guardar los pasajeros del viaje START - FOREACH
-                    $pasajero = new PasajeroEjecutivo;
-                    $pasajero->nombre = $pasajeros[$i]['nombre'];
-                    $pasajero->indicativo = $pasajeros[$i]['indicativo'];
-                    $pasajero->celular = $pasajeros[$i]['celular'];
-                    $pasajero->correo = $pasajeros[$i]['correo'];
-                    $pasajero->fk_viaje = $viaje->id;
-                    $pasajero->save();
-                    //Guardar los pasajeros del viaje END
-
-                    if($actualDate<=$viajes[$a]['fecha_viaje']){
-
-                        if($actualTime<=$horaMaxima){
-
-                            if($pasajeros[$i]['celular']!=null){
-
-                                $vehiculo = DB::table('vehiculos')->where('id',$viaje->fk_vehiculo)->first();
-                                $conductor = DB::table('conductores')->where('id',$viaje->fk_conductor)->first();
-    
-                                $number = intval($pasajeros[$i]['indicativo'].$pasajeros[$i]['celular']);
-    
-                                $nombre = $conductor->primer_nombre;
-    
-                                $fecha = $viaje->fecha_viaje;
-                                $hora = $viaje->hora_viaje;
-    
-                                $cliente = DB::table('centrosdecosto')->where('id',$request->centrodecosto)->pluck('razonsocial');
-    
-                                if($vehiculo->placa=='ABC-123'){
-                                    $placaVehiculo = 'POR CONFIRMAR';
-                                }else{
-                                    $placaVehiculo = $vehiculo->placa;
-                                }
-    
-                                $res = Viaje::notificarViajeEjecutivo($number, $pasajero->nombre, $fecha, $hora, $nombre, $placaVehiculo, $trayecto, $viaje->id);
-    
-                            }
-
-                        }
-
-                    }
-
-                }
-
-                //si la fecha y la hora actuales son menores a la fecha y hora del servicio
-                if($actualDate<=$viajes[$a]['fecha_viaje']){
-
-                    if($actualTime<=$horaMaxima){
-                        $number = rand(10000000, 99999999);
-                        $res2 = Viaje::notificarConductor($viaje->fk_conductor, $viaje->fecha_viaje, $viaje->hora_viaje, $number, $viaje->id);
-                    }
-
-                }
-            }
-
-        }
+        $conductor = DB::table('conductores')
+        ->where('id',$id)
+        ->first();
 
         return Response::json([
-            'response' => true
+            'response' => $conductor
         ]);
 
     }
 
-    public function createmultipletrip(Request $request) {
-
-        $fechas = $request->fecha_viaje;
-
-        for ($u=0; $u < count($fechas); $u++){
-
-            $viaje = new Viaje;
-
-            $code = "";
-            $characters = array_merge(range('0','9'));
-            $max = count($characters) - 1;
-            for ($o = 0; $o < 2; $o++) {
-                $rand = mt_rand(0, $max);
-                $code .= $characters[$rand];
-            }
-
-            $viaje->fk_centrodecosto = $request->centrodecosto;
-            $viaje->fk_subcentrodecosto = $request->subcentrodecosto;
-
-            if ($request->user_id!=null) {
-                $viaje->app_user_id = $request->user_id;
-            }
-
-            $ciudad = DB::table('ciudades')->where('id',$request->ciudad)->first();
-            $viaje->fk_departamento = $ciudad->fk_departamento;
-            $viaje->fk_ciudad = $request->ciudad;
-            $viaje->solicitante = $request->solicitante;
-            $viaje->email_solicitante = $request->email_solicitante;
-            $viaje->celular_solicitante = $request->celular_solicitante;
-            
-            $viaje->fecha_solicitud = date('Y-m-d');
-            $viaje->tipo_servicio = 45;
-
-            $viaje->fk_traslado = $request->traslado;
-            $viaje->fk_sede = $request->sede;
-
-            $viaje->detalle_recorrido = $request->detalle_recorrido;
-
-            $conductor = DB::table('conductores')->where('id',$request->conductor)->first();
-            $viaje->fk_proveedor = $conductor->fk_proveedor;
-
-            $viaje->fk_conductor = $request->conductor;
-            $viaje->fk_vehiculo = $request->vehiculo;
-
-            $viaje->fecha_viaje = $fechas[$u];
-            $viaje->hora_viaje = $request->hora_viaje;
-
-            if( $request->vuelo!=null ) {
-                $viaje->vuelo = $request->vuelo;
-            }
-
-            $viaje->creado_por = Auth::user()->id;
-            
-            if( $request->expediente!=null ) {
-                $viaje->expediente = $request->expediente;
-            }
-            
-            if( Auth::user()->id_perfil == 8 ){
-                $viaje->control_facturacion = 1;
-            }
-
-            $viaje->fk_estado = 57;
-
-            $viaje->save();
-
-            $destinos = $request->destino;
-
-            for ($i=0; $i < count($destinos); $i++){
-
-                //Guardar los destinos del viaje START FOREACH
-                $destino = new Destino;
-                $destino->direccion = $destinos[$i]['direccion'];
-                $destino->coordenadas = json_encode([
-                    'latitude' => $destinos[$i]['latitude'],
-                    'longitude' => $destinos[$i]['longitude']
-                ]);
-                $destino->fk_viaje = $viaje->id;
-                $destino->orden = $i+1;
-                $destino->save();
-                //Guardar los destinos del viaje END FOREACH
-
-            }
-
-            $pasajeros = $request->pasajeros;
-
-            for ($i=0; $i < count($pasajeros); $i++){
-                
-                //Guardar los pasajeros del viaje START - FOREACH
-                $pasajero = new PasajeroEjecutivo;
-                $pasajero->nombre = $pasajeros[$i]['nombre'];
-                $pasajero->indicativo = $pasajeros[$i]['indicativo'];
-                $pasajero->celular = $pasajeros[$i]['celular'];
-                $pasajero->correo = $pasajeros[$i]['correo'];
-                $pasajero->fk_viaje = $viaje->id;
-                $pasajero->save();
-                //Guardar los pasajeros del viaje END
-
-            }
-
-            //Parte REVERSO
-            if($request->reverso==1) { //reverso de servicios múltiples
-
-                $viaje = new Viaje;
-
-                $code = "";
-                $characters = array_merge(range('0','9'));
-                $max = count($characters) - 1;
-                for ($o = 0; $o < 2; $o++) {
-                    $rand = mt_rand(0, $max);
-                    $code .= $characters[$rand];
-                }
-
-                $viaje->fk_centrodecosto = $request->centrodecosto;
-                $viaje->fk_subcentrodecosto = $request->subcentrodecosto;
-
-                if ($request->user_id!=null) {
-                    $viaje->app_user_id = $request->user_id;
-                }
-
-                $ciudad = DB::table('ciudades')->where('id',$request->ciudad)->first();
-                $viaje->fk_departamento = $ciudad->fk_departamento;
-                $viaje->fk_ciudad = $request->ciudad;
-                $viaje->solicitante = $request->solicitante;
-                $viaje->email_solicitante = $request->email_solicitante;
-                $viaje->celular_solicitante = $request->celular_solicitante;
-                
-                $viaje->fecha_solicitud = date('Y-m-d');
-                $viaje->tipo_servicio = 45;
-
-                //$viaje->resaltar = $resaltarArray[$i]; //pending
-                //$viaje->pago_directo = $pago_directoArray[$i]; //pending
-                //$viaje->codigo_viaje = $code; //pending
-                //$viaje->cantidad = Input::get('cantidad'); //pending
-
-                $viaje->fk_traslado = $request->traslado;
-                $viaje->fk_sede = $request->sede;
-
-                $viaje->detalle_recorrido = $request->detalle_recorrido;
-
-                $conductor = DB::table('conductores')->where('id',$request->conductor)->first();
-                $viaje->fk_proveedor = $conductor->fk_proveedor;
-
-                $viaje->fk_conductor = $request->conductor;
-                $viaje->fk_vehiculo = $request->vehiculo;
-
-                $viaje->fecha_viaje = $fechas[$u];
-                $viaje->hora_viaje = $request->horados;
-
-                if( $request->vuelo!=null ) {
-                    $viaje->vuelo = $request->vuelo;
-                }
-
-                $viaje->creado_por = Auth::user()->id;
-                
-                if( $request->expediente!=null ) {
-                    $viaje->expediente = $request->expediente;
-                }
-                
-                if( Auth::user()->id_perfil == 8 ){
-                    $viaje->control_facturacion = 1;
-                }
-
-                $viaje->fk_estado = 57;
-
-                $viaje->save();
-
-                $destinos = $request->destinodos;
-
-                //for ($i=0; $i < count($destinos); $i++){
-                
-                $conta = 0;
-                
-                for ($i=0; $i < count($destinos); $i++){
-
-                    //Guardar los destinos del viaje START FOREACH
-                    $destino = new Destino;
-                    $destino->direccion = $destinos[$i]['direccion'];
-                    $destino->coordenadas = json_encode([
-                        'latitude' => $destinos[$i]['latitude'],
-                        'longitude' => $destinos[$i]['longitude']
-                    ]);
-                    $destino->fk_viaje = $viaje->id;
-                    $destino->orden = $i+1;
-                    $destino->save();
-                    //Guardar los destinos del viaje END FOREACH
-
-                }
-
-                $pasajeros = $request->pasajeros;
-
-                for ($i=0; $i < count($pasajeros); $i++){
-                    
-                    //Guardar los pasajeros del viaje START - FOREACH
-                    $pasajero = new PasajeroEjecutivo;
-                    $pasajero->nombre = $pasajeros[$i]['nombre'];
-                    $pasajero->indicativo = $pasajeros[$i]['indicativo'];
-                    $pasajero->celular = $pasajeros[$i]['celular'];
-                    $pasajero->correo = $pasajeros[$i]['correo'];
-                    $pasajero->fk_viaje = $viaje->id;
-                    $pasajero->save();
-                    //Guardar los pasajeros del viaje END
-
-                }
-
-            }
-
-        }
-
-        return Response::json([
-            'response' => true
-        ]);
-
-    }
-
-    public function createtripdispo(Request $request) {
-
-        $viajes = $request->viajes;
-
-        $actualDate = date('Y-m-d');
-        $actualTime = date('H:i');
-
-        for ($a=0; $a < count($viajes); $a++){
-
-            $horaMaxima = date('H:i',strtotime('+30 minute',strtotime($viajes[$a]['hora_viaje'])));
-
-            $viaje = new Viaje;
-
-            $code = "";
-            $characters = array_merge(range('0','9'));
-            $max = count($characters) - 1;
-            for ($o = 0; $o < 2; $o++) {
-                $rand = mt_rand(0, $max);
-                $code .= $characters[$rand];
-            }
-
-            $viaje->fk_centrodecosto = $request->centrodecosto;
-            $viaje->fk_subcentrodecosto = $request->subcentrodecosto;
-
-            if ($request->user_id!=null) {
-                $viaje->app_user_id = $request->user_id;
-            }
-
-            $ciudad = DB::table('ciudades')->where('id',$request->ciudad)->first();
-            $viaje->fk_departamento = $ciudad->fk_departamento;
-            $viaje->fk_ciudad = $request->ciudad;
-            $viaje->solicitante = $request->solicitante;
-            $viaje->email_solicitante = $request->email_solicitante;
-            $viaje->celular_solicitante = $request->celular_solicitante;
-            $viaje->fk_sede = $request->sede;
-            $viaje->fecha_solicitud = date('Y-m-d');
-
-            $viaje->tipo_servicio = 46;
-
-            $viaje->fk_traslado = $viajes[$a]['traslado'];
-
-            $viaje->detalle_recorrido = $viajes[$a]['detalle_recorrido'];
-
-            $conductor = DB::table('conductores')->where('id',$viajes[$a]['conductor'])->first();
-            $viaje->fk_proveedor = $conductor->fk_proveedor;
-
-            $viaje->fk_conductor = $viajes[$a]['conductor'];
-            $viaje->fk_vehiculo = $viajes[$a]['vehiculo'];
-
-            $viaje->fecha_viaje = $viajes[$a]['fecha_viaje'];
-            $viaje->hora_viaje = $viajes[$a]['hora_viaje'];
-
-            if( $viajes[$a]['vuelo']!=null ) {
-                $viaje->vuelo = $viajes[$a]['vuelo'];
-            }
-
-            $viaje->creado_por = Auth::user()->id;
-            
-            if( $viajes[$a]['expediente']!=null ) {
-                $viaje->expediente = $viajes[$a]['expediente'];
-            }
-            
-            if( Auth::user()->id_perfil == 8 ){
-                $viaje->control_facturacion = 1;
-            }
-
-            $viaje->fk_estado = 57;
-
-            $viaje->save();
-
-            $destinos = $viajes[$a]['destino'];
-            
-            $trayecto = '';
-
-            for ($i=0; $i < count($destinos); $i++){
-
-                //Guardar los destinos del viaje START FOREACH
-                $destino = new Destino;
-                $destino->direccion = $destinos[$i]['direccion'];
-                $destino->coordenadas = json_encode([
-                    'latitude' => $destinos[$i]['latitude'],
-                    'longitude' => $destinos[$i]['longitude']
-                ]);
-                $destino->fk_viaje = $viaje->id;
-                $destino->orden = $i+1;
-                $destino->save();
-
-                $trayecto = $trayecto.$destinos[$i]['direccion'].' | ';
-
-                //Guardar los destinos del viaje END FOREACH
-
-            }
-
-            $pasajeros = $viajes[$a]['pasajeros'];
-
-            for ($i=0; $i < count($pasajeros); $i++){
-                
-                //Guardar los pasajeros del viaje START - FOREACH
-                $pasajero = new PasajeroEjecutivo;
-                $pasajero->nombre = $pasajeros[$i]['nombre'];
-                $pasajero->indicativo = $pasajeros[$i]['indicativo'];
-                $pasajero->celular = $pasajeros[$i]['celular'];
-                $pasajero->correo = $pasajeros[$i]['correo'];
-                $pasajero->fk_viaje = $viaje->id;
-                $pasajero->save();
-                //Guardar los pasajeros del viaje END
-
-                if($actualDate<=$viajes[$a]['fecha_viaje']){
-
-                    if($actualTime<=$horaMaxima){
-
-                        if($pasajeros[$i]['celular']!=null){
-
-                            $vehiculo = DB::table('vehiculos')->where('id',$viaje->fk_vehiculo)->first();
-                            $conductor = DB::table('conductores')->where('id',$viaje->fk_conductor)->first();
-
-                            $number = intval($pasajeros[$i]['indicativo'].$pasajeros[$i]['celular']);
-
-                            $nombre = $conductor->primer_nombre;
-
-                            $fecha = $viaje->fecha_viaje;
-                            $hora = $viaje->hora_viaje;
-
-                            $cliente = DB::table('centrosdecosto')->where('id',$request->centrodecosto)->pluck('razonsocial');
-
-                            if($vehiculo->placa=='ABC-123'){
-                                $placaVehiculo = 'POR CONFIRMAR';
-                            }else{
-                                $placaVehiculo = $vehiculo->placa;
-                            }
-
-                            $res = Viaje::notificarViajeEjecutivo($number, $pasajero->nombre, $fecha, $hora, $nombre, $placaVehiculo, $trayecto, $viaje->id);
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-            //si la fecha y la hora actuales son menores a la fecha y hora del servicio
-            if($actualDate<=$viajes[$a]['fecha_viaje']){
-
-                if($actualTime<=$horaMaxima){
-                    $number = rand(10000000, 99999999);
-                    $res2 = Viaje::notificarConductor($viaje->fk_conductor, $viaje->fecha_viaje, $viaje->hora_viaje, $number, $viaje->id);
-                }
-
-            }
-
-        }
-
-        return Response::json([
-            'response' => true
-        ]);
-
-    }
-
-    public function listtrips(Request $request) {
-
-        $viajes = "SELECT
-		v.*,
-        c.razonsocial, 
-        sub.nombre, 
-        p.razonsocial as nombre_proveedor, 
-        cond.primer_nombre, 
-        cond.segundo_nombre, 
-        cond.primer_apellido, 
-        cond.segundo_apellido, 
-        veh.placa, 
-        veh.marca, 
-        veh.modelo, 
-        veh.ano, 
-        veh.capacidad, 
-        veh.color, 
-        ciu.nombre as nombre_ciudad, 
-        tras.nombre as nombre_traslado,
-        est.nombre as nombre_estado,
-        est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('nombre', pax.nombre, 'celular', pax.celular)) FROM viajes v2 left join pasajeros_ejecutivos pax on pax.fk_viaje = v2.id where v2.id = v.id) as pasajeros_ejecutivos
-        FROM
-            viajes v
-        left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
-        left join subcentrosdecosto sub on sub.id = v.fk_subcentrodecosto
-        left join proveedores p on p.id = v.fk_proveedor
-        left JOIN conductores cond on cond.id = v.fk_conductor
-        left join vehiculos veh on veh.id = v.fk_vehiculo
-        left join ciudades ciu on ciu.id = v.fk_ciudad
-        left join traslados tras on tras.id = v.fk_traslado
-        left join destinos d on d.fk_viaje = v.id 
-        -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
-        left join estados est on est.id = v.fk_estado 
-        where v.estado_eliminacion is null
-        GROUP BY v.id";
-        
-        $viajes = DB::select($viajes);
-
-        return Response::json([
-            'response' => true,
-            'viajes' => $viajes
-        ]);
-
-    }
-
-    public function showtripdetails(Request $request) {
-
-        /*$viajes = "SELECT
-		v.*,
-        c.razonsocial, 
-        sub.nombre, 
-        p.razonsocial as nombre_proveedor, 
-        cond.primer_nombre, 
-        cond.segundo_nombre, 
-        cond.primer_apellido, 
-        cond.segundo_apellido, 
-        veh.placa, 
-        veh.marca, 
-        veh.modelo, 
-        veh.ano, 
-        veh.capacidad, 
-        veh.color, 
-        ciu.nombre as nombre_ciudad, 
-        tras.nombre as nombre_traslado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos
-        FROM
-            viajes v
-        left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
-        left join subcentrosdecosto sub on sub.id = v.fk_subcentrodecosto
-        left join proveedores p on p.id = v.fk_proveedor
-        left JOIN conductores cond on cond.id = v.fk_conductor
-        left join vehiculos veh on veh.id = v.fk_vehiculo
-        left join ciudades ciu on ciu.id = v.fk_ciudad
-        left join traslados tras on tras.id = v.fk_traslado
-        left join destinos d on d.fk_viaje = v.id 
-        where v.id = ".$request->id."
-        GROUP BY v.id";*/
-
-        $viaje = "SELECT
-		v.*,
-        c.razonsocial, 
-        sub.nombre, 
-        p.razonsocial as nombre_proveedor, 
-        cond.primer_nombre, 
-        cond.segundo_nombre, 
-        cond.primer_apellido, 
-        cond.segundo_apellido, 
-        veh.placa, 
-        veh.marca, 
-        veh.modelo, 
-        veh.ano, 
-        veh.capacidad, 
-        veh.color, 
-        ciu.nombre as nombre_ciudad, 
-        tras.nombre as nombre_traslado,
-        est.nombre as nombre_estado,
-        est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('nombre', pax.nombre, 'correo', pax.correo, 'celular', pax.celular, 'indicativo', pax.indicativo)) FROM viajes v2 left join pasajeros_ejecutivos pax on pax.fk_viaje = v2.id where v2.id = v.id) as pasajeros_ejecutivos
-        FROM
-            viajes v
-        left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
-        left join subcentrosdecosto sub on sub.id = v.fk_subcentrodecosto
-        left join proveedores p on p.id = v.fk_proveedor
-        left JOIN conductores cond on cond.id = v.fk_conductor
-        left join vehiculos veh on veh.id = v.fk_vehiculo
-        left join ciudades ciu on ciu.id = v.fk_ciudad
-        left join traslados tras on tras.id = v.fk_traslado
-        left join destinos d on d.fk_viaje = v.id 
-        -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
-        left join estados est on est.id = v.fk_estado 
-        where v.id = ".$request->id."
-        GROUP BY v.id limit 1";
-        
-        $viaje = DB::select($viaje);
-        
-        return Response::json([
-            'response' => true,
-            'viaje' => $viaje
-        ]);
-
-    }
-
-    public function edittrip(Request $request) {
-
-        $viaje = Viaje::find($request->id);
-
-        $actualDate = date('Y-m-d');
-        $actualTime = date('H:i');
-
-        $conductorOld = $viaje->fk_conductor;
-        $clienteOld = $request->fk_centrodecosto;
-        $fechaOld = $request->fecha_viaje;
-
-        //$consulta = "SELECT * FROM liquidacion_servicios WHERE '".Input::get('fecha_servicio')."' BETWEEN fecha_inicial AND fecha_final and centrodecosto_id = '".Input::get('centrodecosto_id')."' and subcentrodecosto_id = '".Input::get('subcentrodecosto_id')."' and ciudad = '".Input::get('ciudad')."' and anulado is null and nomostrar is null";
-        //$consulta_orden = "SELECT * FROM ordenes_facturacion WHERE '".Input::get('fecha_servicio')."' BETWEEN fecha_inicial AND fecha_final and centrodecosto_id = '".Input::get('centrodecosto_id')."' and subcentrodecosto_id = '".Input::get('subcentrodecosto_id')."' and ciudad = '".Input::get('ciudad')."' and anulado is null and nomostrar is null and tipo_orden = 1";
-
-        //$liquidacion = DB::select($consulta);
-        //$ordenes_facturacion = DB::select($consulta_orden);
-
-        $ordenes_facturacion = null; //quitar cuando se haga el módulo de facturación
-        $liquidacion = null; //quitar cuando se haga el módulo de facturación
-
-        if($ordenes_facturacion!=null or $liquidacion!=null){
-
-            return Response::json([
-                'response'=>'rechazado',
-                'liquidacion'=>$liquidacion,
-                'ordenes_facturacion'=>$ordenes_facturacion
-            ]);
-
-        }else{
-
-            //Si el campo app user id es diferente de null
-            /*if (Input::get('app_user_id')!=null) {
-                //Asignarle valor a la variable app_user_id 228
-                $app_user_id = $viaje->app_user_id;
-
-            }else {
-                //Si el campo es null o tiene otro valor
-                $app_user_id = null;
-
-            }*/
-
-            $viaje->fk_centrodecosto = $request->centrodecosto;
-            $viaje->fk_subcentrodecosto = $request->subcentrodecosto;
-            $ciudad = DB::table('ciudades')->where('id',$request->ciudad)->first();
-            $viaje->fk_departamento = $ciudad->fk_departamento;
-            $viaje->fk_ciudad = $request->ciudad;
-            $viaje->cantidad = count($request->pasajeros);
-            $viaje->solicitante = $request->solicitante;
-            $viaje->email_solicitante = $request->email_solicitante;
-
-            //Edición de destinos - PENDING
-
-            $viaje->detalle_recorrido = $request->detalle_recorrido;
-
-            if ($request->conductorCambiado==1) {
-                
-                $driver = DB::table('conductores')
-                ->where('id',$request->conductor)
-                ->first();
-
-                $viaje->fk_proveedor = $driver->fk_proveedor;
-                $viaje->fk_conductor = $request->conductor;
-                $viaje->fk_vehiculo = $request->vehiculo;
-
-            }
-
-            $viaje->fecha_viaje = $request->fecha_viaje;
-            $viaje->hora_viaje = $request->hora_viaje;
-
-            //$viaje->resaltar = Input::get('resaltar');
-            //$viaje->pago_directo = Input::get('pago_directo');
-
-            if($request->vuelo!=null) {
-                $viaje->vuelo = $request->vuelo;
-            }
-
-            //$viaje->servicio_up_id = $request->usuario_aplicación;
-
-            if ($viaje->save()) {
-
-                if ($request->conductorCambiado==1) {
-
-                    $horaMaxima = date('H:i',strtotime('+30 minute',strtotime($viaje->hora_viaje)));
-
-                    if($actualDate<=$viaje->fecha_viaje){
-
-                        if($actualTime<=$horaMaxima){
-
-                            //cuando se cambia de conductor toca iniciar aceptado = 0, por si el conductor habia aceptado antes y tiene que aceptar otro conductor
-                            //$servicio = Viaje::find($viaje->id);
-                            //$servicio->fk_estado = 1; //Colocar el estado de PENDIENTE POR ACEPTAR
-                            //$servicio->save();
-
-                            $centrodecosto = Centrosdecosto::find($clienteOld);
-
-                            $notificacionConductorAntiguo = 'Tu viaje de '.$centrodecosto->razonsocial.' del '.$fechaOld.'  fue reasignado a otro conductor.';
-
-                            $notificacionConductorNuevo = 'Tienes un nuevo viaje para el '.$request->fecha_viaje.', a las: '.$request->hora_viaje.'. Presiona aquí para ver más detalles.';
-
-                            //Notificacion de viaje a conductor que lo tenía
-                            Viaje::NotificacionConductorAntiguo($notificacionConductorAntiguo, $conductorOld);
-
-                            //Notificacion de viaje asignado a nuevo conductor
-                            Viaje::NotificacionConductorNuevo($nuevo_servicio, $request->conductor);
-                        }
-                        
-                    }
-
-                }
-
-                if($viaje->app_user_id!=null && $viaje->app_user_id!=0){ //Si es servicio de la app
-
-                    $actualDate = date('Y-m-d');
-                    $actualTime = date('H:i');
-
-                    $horaMaxima = date('H:i',strtotime('+30 minute',strtotime($viaje->hora_viaje)));
-
-                    if($actualDate<=$viaje->fecha_viaje){
-
-                        if($actualTime<=$horaMaxima){
-
-                            if ($request->conductorCambiado==1 || $request->fechaCambiada==1 || $request->horaCambiada==1) {
-
-                                $messageCliente = "Le informamos cambio de ";
-                                $messageClienteEn = "AOTOUR informs you change of ";
-
-                                if($request->conductorCambiado==1){
-                                    $messageCliente = $messageCliente.'CONDUCTOR, ';
-                                    $messageClienteEn = $messageClienteEn.'DRIVER, ';
-                                }
-                                if($request->horaCambiada==1){
-                                    $messageCliente = $messageCliente.'HORA, ';
-                                    $messageClienteEn = $messageClienteEn.'TIME, ';
-                                }
-                                if($request->fechaCambiada==1){
-                                    $messageCliente = $messageCliente.'FECHA, ';
-                                    $messageClienteEn = $messageClienteEn.'DATE, ';
-                                }
-
-                                $messageCliente = $messageCliente.'en su traslado programado para el '.$fechaOld.'.';
-                                $messageClienteEn = $messageClienteEn.'on your scheduled transfer on '.$fechaOld.'.';
-
-                                Viaje::NotificacionCambiosUp($messageCliente, $messageClienteEn, $viaje->app_user_id);
-
-                            }
-
-                        }
-
-                    }
-
-                }else{//sino, confirmar por correo a los pasajeros y whatsapp
-
-                    $actualDate = date('Y-m-d');
-                    $actualTime = date('H:i');
-
-                    //si la fecha y la hora actuales son menores a la fecha y hora del servicio
-                    $horaMaxima = date('H:i',strtotime('+30 minute',strtotime($viaje->hora_viaje)));
-
-                    if($actualDate<=$viaje->fecha_viaje){
-
-                        if($actualTime<=$horaMaxima){
-                            //si hubo cambios en el conductor, fecha u hora.
-                            //if ($conductor!=$servicios->conductor_id || $hora_servicio!=$servicios->hora_servicio || $fecha_servicio!=$servicios->fecha_servicio || $recoger_en!=$servicios->recoger_en || $dejar_en!=$servicios->dejar_en) {
-                            if(1>4){
-
-                                $passengers = DB::table('pasajeros_ejecutivos')->where('fk_viaje',$request->id)->get();
-
-                                foreach ($passengers as $pass) {
-                                    
-                                    $nombre = $pass->nombre;
-                                    $correo = $pass->correo;
-
-                                    /*Mail::send('ruta', $data, function($message) use ($correo){
-                                        $message->from('no-reply@aotour.com.co', 'Notificaciones Aotour');
-                                        $message->to($correo)->subject('Actualización de Servicio');
-                                    });*/
-
-                                    if($pass->celular!=null) {
-
-                                        $celular = intval($pass->indicativo.$pass->celular);
-
-                                        $fecha = $request->fecha_viaje;
-                                        $hora = $request->hora_viaje;
-
-                                        $vehiculo = DB::table('vehiculos')
-                                        ->where('id',$request->fk_vehiculo)
-                                        ->first();
-
-                                        $conductor = DB::table('conductores')
-                                        ->where('id',$request->fk_conductor)
-                                        ->first();
-
-                                        $trayecto = 'Colocar aquí los destinos';
-
-                                        Viaje::ActualizacionViaje($celular, $nombre, $fecha, $hora, $conductor->primer_nombre, $vehiculo->placa, $trayecto, $viaje->id);
-
-                                    }
-
-                                }
-
-                            }
-
-                        }
-
-                    }
-
-                }
-
-                if ($request->cambios!=null) {
-
-                    for ($t=0; $t < count($request->cambios) ; $t++) {
-                        
-                        $ediciones_servicios = DB::table('edicion_de_servicios')
-                        ->insert([
-                            'cambios' => $request->cambios[$t],
-                            'created_at' => date('Y-m-d H:i:s'),
-                            'creado_por' => Auth::user()->id,
-                            'fk_viaje' => $viaje->id
-                        ]);
-                        
-                    }
-
-                    return Response::json([
-                        'response' => true,
-                        'message' => 'Se ha modificado el viaje exitosamente!'
-                    ]);
-
-                }
-
-                return Response::json([
-                    'response' => true,
-                    'message' => 'Se ha modificado el viaje exitosamente!'
-                ]);
-
-            }else{
-
-                return Response::json([
-                    'response' => false,
-                    'message' => 'Opps! Parece que ocurrió un error al intentar modificar este viaje. Comunícate con el administrador del sistema e indícale el número de viaje: '.$viaje->id
-                ]);
-
-            }
-        }
-
-    }
-
-    public function scheduletripremoval(Request $request) {
-
-        #TOMAR ID DEL SERVICIO
-        $id = $request->id;
-
-        #BUSCAR SERVICIO POR ID
-        $viaje = Viaje::find($request->id);
-        $viaje->motivo_eliminacion = $request->motivo_eliminacion;
-        $viaje->estado_eliminacion = 1;
-        $viaje->usuario_eliminacion = Auth::user()->id;
-        $viaje->fecha_solicitud_eliminacion = date('Y-m-d H:i:s');
-
-        if($viaje->save()){
-
-            $centrodecosto = DB::table('centrosdecosto')
-            ->where('id',$viaje->fk_centrodecosto)
-            ->first();
-
-            Viaje::notificarViajeCancelado($viaje->fk_conductor, $centrodecosto->razonsocial, $viaje->fecha_viaje, $viaje->hora_viaje);
-        }
-
-        return Response::json([
-            'response' => true
-        ]);
-
-    }
-
-    public function deletetrip(Request $request) {
-
-        $viaje = Viaje::find($request->id);
-        $viaje->estado_papelera = 1;
-        $viaje->save();
-
-        return Response::json([
-            'response'=>true
-        ]);
-
-    }
-
-    public function declinedeletetrip(Request $request) {
-
-        $viaje = Viaje::find($request->id);
-        //$viaje->motivo_eliminacion = null;
-        $viaje->estado_eliminacion = null;
-        //$viaje->usuario_eliminacion = Auth::user()->id;
-        //$viaje->fecha_solicitud_eliminacion = date('Y-m-d H:i:s');
-
-        if($viaje->save()){
-
-            //$centrodecosto = DB::table('centrosdecosto')
-            //->where('id',$viaje->fk_centrodecosto)
-            //->first();
-
-            //Viaje::notificarViajeCancelado($viaje->fk_conductor, $centrodecosto->razonsocial, $viaje->fecha_viaje, $viaje->hora_viaje);
-
-            return Response::json([
-                'response' => true
-            ]);
-
-        }
-
-    }
-
-    public function listtripsbyremove(Request $request) {
-
-        $viajes = "SELECT
-		v.*,
-        c.razonsocial, 
-        sub.nombre, 
-        p.razonsocial as nombre_proveedor, 
-        cond.primer_nombre, 
-        cond.segundo_nombre, 
-        cond.primer_apellido, 
-        cond.segundo_apellido, 
-        veh.placa, 
-        veh.marca, 
-        veh.modelo, 
-        veh.ano, 
-        veh.capacidad, 
-        veh.color, 
-        ciu.nombre as nombre_ciudad, 
-        tras.nombre as nombre_traslado,
-        est.nombre as nombre_estado,
-        est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('nombre', pax.nombre, 'celular', pax.celular)) FROM viajes v2 left join pasajeros_ejecutivos pax on pax.fk_viaje = v2.id where v2.id = v.id) as pasajeros_ejecutivos
-        FROM
-            viajes v
-        left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
-        left join subcentrosdecosto sub on sub.id = v.fk_subcentrodecosto
-        left join proveedores p on p.id = v.fk_proveedor
-        left JOIN conductores cond on cond.id = v.fk_conductor
-        left join vehiculos veh on veh.id = v.fk_vehiculo
-        left join ciudades ciu on ciu.id = v.fk_ciudad
-        left join traslados tras on tras.id = v.fk_traslado
-        left join destinos d on d.fk_viaje = v.id 
-        -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
-        left join estados est on est.id = v.fk_estado 
-        where v.estado_eliminacion = 1 and v.estado_papelera is null
-        GROUP BY v.id";
-        
-        $viajes = DB::select($viajes);
-
-        return Response::json([
-            'response' => true,
-            'viajes' => $viajes
-        ]);
-
-    }
-
-    public function listbin(Request $request) {
-
-        $viajes = "SELECT
-		v.*,
-        c.razonsocial, 
-        sub.nombre, 
-        p.razonsocial as nombre_proveedor, 
-        cond.primer_nombre, 
-        cond.segundo_nombre, 
-        cond.primer_apellido, 
-        cond.segundo_apellido, 
-        veh.placa, 
-        veh.marca, 
-        veh.modelo, 
-        veh.ano, 
-        veh.capacidad, 
-        veh.color, 
-        ciu.nombre as nombre_ciudad, 
-        tras.nombre as nombre_traslado,
-        est.nombre as nombre_estado,
-        est.codigo as codigo_estado,
-        JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('nombre', pax.nombre, 'celular', pax.celular)) FROM viajes v2 left join pasajeros_ejecutivos pax on pax.fk_viaje = v2.id where v2.id = v.id) as pasajeros_ejecutivos
-        FROM
-            viajes v
-        left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
-        left join subcentrosdecosto sub on sub.id = v.fk_subcentrodecosto
-        left join proveedores p on p.id = v.fk_proveedor
-        left JOIN conductores cond on cond.id = v.fk_conductor
-        left join vehiculos veh on veh.id = v.fk_vehiculo
-        left join ciudades ciu on ciu.id = v.fk_ciudad
-        left join traslados tras on tras.id = v.fk_traslado
-        left join destinos d on d.fk_viaje = v.id 
-        -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
-        left join estados est on est.id = v.fk_estado 
-        where v.estado_papelera = 1
-        GROUP BY v.id";
-        
-        $viajes = DB::select($viajes);
-
-        return Response::json([
-            'response' => true,
-            'viajes' => $viajes
-        ]);
-
-    }
-
-    public function showtracking(Request $request) {
+    public function gps(Request $request) {
 
         $gps = DB::table('gps')
-        ->where('fk_viaje',$request->id)
+        ->where('fk_viaje',$request->viaje_id)
         ->first();
 
         $destinos = DB::table('destinos')
@@ -2588,64 +1592,149 @@ class ViajesController extends Controller
 
     }
 
-    public function shownovs(Request $request) {
+    public function notificaciones(Request $request) {
 
-        $novedades = DB::table('novedades_de_viajes')
-        ->select('novedades_de_viajes.*','users.first_name','users.last_name', 'estados.nombre as nombre_estado', 'estados.codigo as codigo_estado', 'tipos.nombre as nombre_tipo', 'tipos.codigo as codigo_tipo')
-        ->join('users', 'novedades_de_viajes.fk_user', '=', 'users.id')
-        ->join('estados', 'estados.id', '=',  'novedades_de_viajes.fk_estado')
-        ->join('tipos', 'tipos.id', '=',  'novedades_de_viajes.tipo')
-        ->where('fk_viaje',$request->id)
+        $id = $request->conductor_id;
+
+        $fechaActual = date('Y-m-d');
+        $horaActual = date('H:i');
+
+        $notificaciones = DB::table('notificaciones_conductores')
+        //->leftJoin('viajes', 'viajes.id', '=', 'notificaciones_conductores.id_servicio', 'seevicios.estado_servicio_app')
+        //->select('notificaciones.*', 'servicios.fecha_servicio', 'servicios.hora_servicio')
+        ->where('conductor_id',intval($id))
+        //->where('servicios.fecha_servicio', '<=', $fechaActual)
+        ->whereNull('leido')
+        ->orderBy('fecha', 'DESC')
         ->get();
 
-        if(count($novedades)<1) {
-            $novedades = null;
+        $contador = count($notificaciones);
+
+        if($contador>0) {
+
+            $update = DB::table('notificaciones_conductores')
+            ->where('conductor_id',intval($id))
+            ->whereNull('leido')
+            ->update([
+                'leido' => 1
+            ]);
+
+            return Response::json([
+                'response' => true,
+                'contador' => $contador
+            ]);
+
+        }else{
+
+            return Response::json([
+                'response' => false
+            ]);
+
         }
 
-        $ediciones = DB::table('edicion_de_servicios')
-        ->select('edicion_de_servicios.cambios', 'edicion_de_servicios.creado_por','edicion_de_servicios.created_at', 'users.first_name','users.last_name')
-        ->where('fk_viaje', $request->id)
-        ->leftJoin('users','edicion_de_servicios.creado_por', '=','users.id')
+    }
+
+    public function listarnotificaciones(Request $request) {
+
+        $id = $request->conductor_id;
+
+        $fechaActual = date('Y-m-d');
+        $horaActual = date('H:i');
+
+        $servicios = DB::table('viajes')
+        ->select('viajes.id')
+        ->where('app_user_id',$id)
+        ->whereNull('estado_eliminacion')
+        ->whereNull('estado_papelera')
+        ->where('fecha_viaje', '>=', $fechaActual)
         ->get();
 
-        if(count($ediciones)<1) {
-            $ediciones = null;
-        }
-
-        $cambiosFacturacion = DB::table('edicion_de_facturacion')
-        ->select('edicion_de_facturacion.cambios', 'edicion_de_facturacion.creado_por','edicion_de_facturacion.created_at', 'users.first_name','users.last_name')
-        ->where('fk_viaje', $request->id)
-        ->leftJoin('users','edicion_de_facturacion.creado_por', '=','users.id')
+        $notificaciones = DB::table('notificaciones_conductores')
+        ->leftJoin('viajes', 'viajes.id', '=', 'notificaciones_conductores.id_servicio')
+        ->select('notificaciones_conductores.*', 'viajes.fecha_viaje as fecha_servicio', 'viajes.hora_viaje as hora_servicio')
+        ->where('conductor_id', intval($id))
+        ->where('viajes.fecha_viaje', '>=', $fechaActual)
+        ->orderBy('fecha', 'DESC')
         ->get();
 
-        if(count($cambiosFacturacion)<1) {
-            $cambiosFacturacion = null;
+        if($notificaciones){
+
+            $update = DB::table('notificaciones_conductores')
+            ->where('conductor_id', intval($id))
+            ->whereNull('leido')
+            ->update([
+                'leido'=> 1
+            ]);
+
+            return Response::json([
+                'response' => true,
+                'notificaciones' => $notificaciones,
+                'viajes' => $servicios
+            ]);
+
+        }else{
+
+            $update = DB::table('notificaciones_conductores')
+            ->where('conductor_id',intval($id))
+            ->whereNull('leido')
+            ->update([
+                'leido'=> 1
+            ]);
+
+            return Response::json([
+                'response' => false,
+                'usuario' => $id,
+                'notificaciones' => $notificaciones,
+                'viajes' => $servicios
+            ]);
+
         }
+
+    }
+
+    public function listartiposnovedades(Request $request) {
+
+        $novedades = DB::table('tipos')
+        ->select('id', 'codigo', 'nombre')
+        ->where('fk_tipo_maestros', 29)
+        ->whereIn('id',[87, 88, 91])
+        ->get();
 
         return Response::json([
-            'respose' => true,
-            'cambios_facturacion' => $cambiosFacturacion,
-            'cambios_viaje' => $ediciones,
+            'response' => true,
             'novedades' => $novedades
         ]);
 
     }
 
-    //...
-    public function addnov(Request $request) {
+    public function contactos(Request $request) {
 
-        //Validar si el servicio ya está facturado
+        $barranquilla_movil = DB::table('contactos')
+        ->where('ciudad','BARRANQUILLA')
+        ->where('tipo','movil')
+        ->get();
 
-        $novedad = new NovedadViaje;
-        $novedad->tipo = $request->tipo;
-        $novedad->detalles = $request->detalles;
-        $novedad->fk_viaje = $request->viaje;
-        $novedad->fk_estado = 55;
-        $novedad->fk_user = Auth::user()->id;
-        $novedad->save();
+        $barranquilla_email = DB::table('contactos')
+        ->where('ciudad','BARRANQUILLA')
+        ->where('tipo','email')
+        ->get();
+
+        $bogota_movil = DB::table('contactos')
+        ->where('ciudad','BOGOTA')
+        ->where('tipo','movil')
+        ->get();
+
+        $bogota_email = DB::table('contactos')
+        ->where('ciudad','BOGOTA')
+        ->where('tipo','email')
+        ->get();
 
         return Response::json([
-            'response' => true
+            'respuesta'=>true,
+            'barranquilla_movil' => $barranquilla_movil,
+            'barranquilla_email' => $barranquilla_email,
+            'bogota_movil' => $bogota_movil,
+            'bogota_email' => $bogota_email
         ]);
 
     }
