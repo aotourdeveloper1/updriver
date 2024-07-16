@@ -449,9 +449,12 @@ class ViajesController extends Controller
 
                 }
 
+                $querys = "SELECT id, fecha_viaje as fecha_servicio, hora_viaje as hora_servicio, detalle_recorrido, fk_estado, recoger_pasajero, tipo_servicio, codigo_viaje, tipo_traslado, tipo_ruta from viajes where id = ".$viaje->id."";
+                $consulta = DB::select($querys);
+
                 return Response::json([
                     'response' => true,
-                    'viaje' => $viaje
+                    'viaje' => $consulta[0]
                 ]);
 
             }
