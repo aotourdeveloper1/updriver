@@ -854,8 +854,8 @@ class ViajesController extends Controller
 		v.id,
 		v.fk_estado,
 		v.detalle_recorrido,
-		v.fecha_viaje,
-		v.hora_viaje,
+		v.fecha_viaje as fecha_servicio,
+		v.hora_viaje as hora_servicio,
         c.razonsocial,  
         est.nombre as nombre_estado,
         est.codigo as codigo_estado,
@@ -980,7 +980,8 @@ class ViajesController extends Controller
         }else{
 
             return Response::json([
-                'response' => false
+                'response' => false,
+                'novedades' => $novedades
             ]);
 
         }
@@ -1151,7 +1152,7 @@ class ViajesController extends Controller
 
         $filepath = null;
 
-        $view = View::make('servicios.plantilla_constancia_vieja')->with([
+        $view = View::make('plantilla_constancia_vieja')->with([
             'servicio' => $viaje,
             'filepath' => $filepath
         ])->render();
