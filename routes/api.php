@@ -96,6 +96,109 @@ Route::post('/login', function (Request $request) {
     
 });
 
+Route::post('/buscarproveedor', function (Request $request) {
+
+    $identificacion = $request->identificacion;
+
+    $proveedor = DB::table('proveedores')
+    ->where('nit', $identificacion)
+    ->first();
+
+    if($proveedor!=null){
+
+        //El proveedor está habilitado
+        return Response::json([
+            'response' => true,
+            'proveedor' => $proveedor
+        ]);
+
+    }else{
+
+        //El proveedor NO está habilitado
+        return Response::json([
+            'response' => false
+        ]);
+
+    }
+
+});
+
+Route::post('/buscarconductor', function (Request $request) {
+
+    $identificacion = $request->identificacion;
+    $proveedor_id = $request->proveedor_id;
+
+    $conductor = DB::table('conductores')
+    ->where('fk_proveedor',$proveedor_id)
+    ->where('numero_documento', $identificacion)
+    ->first();
+
+    if($conductor!=null) { //Conductor en sistema
+
+        if($conductor->email!=null){ //Tiene app creada
+
+            $usuarioApp = $conductor->email;
+
+            return Response::json([
+                'response' => 'usuario_con_app',
+                'usuario' => $usuarioApp //Se envía usuario para pegar en el campo email, preguntar si quiere iniciar sesión
+            ]);
+
+        }else{ //No tiene app creada
+
+            return Response::json([
+                'response' => 'usuario_sin_app',
+                'conductor_id' => $conductor->id
+            ]); //Se envía id y se pregunta si quiere crear su app
+
+        }
+
+    }else{ //Conductor no está en sistema
+
+        return Response::json([
+            'response' => false,
+            'mensaje' => 'No se encontró ningún usuario con su cédula.<br><br>Valida tu identificación o comunícate con servicio al cliente.'
+        ]);
+
+    }
+
+});
+
+Route::post('/crearapp', function (Request $request) {
+
+    $conductor_id = $request->conductor_id;
+
+    $username = $request->username;
+
+    $data = strtolower($username.'@aotour.com.co');
+
+    $consulta = DB::table('conductores')
+    ->where('email',$data)
+    ->first();
+
+    if($consulta!=null){
+
+        return Response::json([
+            'response' => 'existe' //Correo ya tomado por otro usuario
+        ]);
+
+    }else{
+
+        $conductor = Conductor::find($conductor_id);
+        $conductor->email = $data;
+        $conductor->password = $conductor->numero_documento;
+        $conductor->save();
+
+        return Response::json([
+            'response' => true,
+            'email' => $conductor->email,
+            'password' => $conductor->numero_documento
+        ]);
+
+    }
+
+});
+
 Route::post('/crearconductor', function (Request $request) {
 
     $driver = DB::table('conductores')
