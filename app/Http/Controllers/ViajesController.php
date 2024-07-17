@@ -569,12 +569,14 @@ class ViajesController extends Controller
         v.recoger_pasajero,
         t2.nombre as tipo_de_ruta,
         t2.codigo as codigo_tipo_ruta,
+        sub.coords,
         JSON_ARRAYAGG(JSON_OBJECT('direccion', d.direccion)) as destinos,
         (SELECT COUNT(*) FROM viajes v3 left join pasajeros_rutas_qr pax on pax.fk_viaje = v3.id where v3.id = v.id) as total_pasajeros_ruta,
         (SELECT COUNT(*) FROM viajes v4 left join pasajeros_ejecutivos pass on pass.fk_viaje = v4.id where v4.id = v.id) as total_pasajeros_ejecutivos
         FROM
             viajes v
         left JOIN centrosdecosto c on c.id = v.fk_centrodecosto
+        left JOIN subcentrosdecosto sub on sub.id = v.fk_subcentrodecosto
         left join destinos d on d.fk_viaje = v.id 
         -- left join pasajeros_ejecutivos pax on pax.fk_viaje = v.id 
         left join estados est on est.id = v.fk_estado 
@@ -1389,7 +1391,7 @@ class ViajesController extends Controller
 
                     $empleadoUser = DB::table('users')
                     ->select('id', 'idregistrationdevice', 'idioma')
-                    ->where('id_empleado', $user->id_usuario)
+                    ->where('id_empleado', $user->id_empleado)
                     ->first();
 
                     if($empleadoUser) {
@@ -1552,44 +1554,21 @@ class ViajesController extends Controller
     public function gps(Request $request) {
 
         $gps = DB::table('gps')
-        ->where('fk_viaje',$request->viaje_id)
+        ->where('fk_viaje', $request->viaje_id)
         ->first();
-
-        $destinos = DB::table('destinos')
-        ->where('fk_viaje',$request->id)
-        ->get();
 
         if($gps) {
 
-            $value = json_decode($gps->coordenadas);
-
-            $cont = count($value);
-
-            $last = $value[$cont-1];
-
             return Response::json([
                 'response' => true,
-                'ultima_ubicacion' => $last,
-                'destinos' => $destinos,
-                //'gps' => $gps
+                'gps' => $gps->coordenadas
             ]);
 
         }else{
 
-            $viaje = Viaje::find($request->id);
-
-            if($viaje->fk_estado==1) { //Validar que sea estado finalizado
-                $text = ' Puede que se deba a que el conductor no activó la ubicación o no tenía conexión a internet durante la ejecución del viaje';
-            }else if($viaje->estado==2) { //Validar que sea estado en servicio
-                $text = ' Puede ser que el conductor no tenga la ubicación activa o que no disponga de conexión a internet.';
-            }else{
-                $text = '';
-            }
-
             return Response::json([
                 'response' => false,
-                'message' => 'Opps! Parece que este servicio no ha registrado GPS.'.$text,
-                'destinos' => $destinos
+                'message' => 'Opps! Parece que este servicio no ha registrado GPS.'
             ]);
 
         }
