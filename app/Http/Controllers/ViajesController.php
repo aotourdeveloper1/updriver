@@ -1561,7 +1561,7 @@ class ViajesController extends Controller
 
             return Response::json([
                 'response' => true,
-                'gps' => $gps->coordenadas
+                'gps' => json_decode($gps->coordenadas)
             ]);
 
         }else{
