@@ -93,7 +93,7 @@ class AuthController extends Controller
         $conductor = DB::table('conductores')
         ->select('id', 'primer_nombre', 'fk_proveedor', 'numero_documento')
         ->where('fk_proveedor', $proveedor_id)
-        ->where('cc',$identificacionConductor)
+        ->where('numero_documento',$identificacionConductor)
         ->first();
 
         if($conductor!=null) {

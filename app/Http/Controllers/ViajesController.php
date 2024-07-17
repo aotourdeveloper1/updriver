@@ -1568,6 +1568,7 @@ class ViajesController extends Controller
 
             return Response::json([
                 'response' => false,
+                'gps' => [],
                 'message' => 'Opps! Parece que este servicio no ha registrado GPS.'
             ]);
 
