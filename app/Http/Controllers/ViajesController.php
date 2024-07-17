@@ -1722,4 +1722,16 @@ class ViajesController extends Controller
 
     }
 
+    public function listarnovedadesejecutivos(Request $request) {
+
+        $query = "SELECT * from tipos where fk_tipo_maestros = 23 and activo = 1";
+        $select = DB::select($query);
+
+        return Response::json([
+            'response' => true,
+            'novedades' => $select
+        ]);
+    
+    }
+
 }
