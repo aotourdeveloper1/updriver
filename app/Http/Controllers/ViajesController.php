@@ -371,7 +371,7 @@ class ViajesController extends Controller
 
                                     $number = '57'.$user->celular;
 
-                                    $notifyIn = Viaje::notificarInicioRutaEntrada($number, $user->direccion, $user->id);
+                                    //$notifyIn = Viaje::notificarInicioRutaEntrada($number, $user->direccion, $user->id);
 
                                 }
 
@@ -419,7 +419,7 @@ class ViajesController extends Controller
                         //envío de whatsapp
                         if($pass->celular!='' and $pass->celular!=null){
 
-                            Viaje::ServicioIniciadoWhatsApp($id, $pass->indicativo, $pass->celular, $viaje);
+                            //Viaje::ServicioIniciadoWhatsApp($id, $pass->indicativo, $pass->celular, $viaje);
 
                         }
 
@@ -625,7 +625,7 @@ class ViajesController extends Controller
             $number = '57'.$usuario->celular;
             $recogerEn = $usuario->direccion;
 
-            $notify = Viaje::usuarioActualWhatsapp($number, $recogerEn, $usuario->id);
+            //$notify = Viaje::usuarioActualWhatsapp($number, $recogerEn, $usuario->id);
 
             $empleadoUser = DB::table('users')
             ->select('id', 'idregistrationdevice', 'idioma')
@@ -695,7 +695,7 @@ class ViajesController extends Controller
                         ->where('id', $viaje->fk_conductor)
                         ->first();
 
-                        Viaje::esperaEjecutivo($viaje, $numero, $nombreConductor[0], $cond->celular, $pass->indicativo);
+                        //Viaje::esperaEjecutivo($viaje, $numero, $nombreConductor[0], $cond->celular, $pass->indicativo);
 
                     }
 
@@ -776,7 +776,7 @@ class ViajesController extends Controller
             $recogerEn = $usuario->direccion;
             $contacto = $conductor->celular;
 
-            $notify = Viaje::esperaRutaWhatsapp($number, $name[0], $recogerEn, $contacto, $usuario->id);
+            //$notify = Viaje::esperaRutaWhatsapp($number, $name[0], $recogerEn, $contacto, $usuario->id);
 
             $empleadoUser = DB::table('users')
             ->select('id', 'idregistrationdevice', 'idioma')
@@ -1350,7 +1350,7 @@ class ViajesController extends Controller
 
                     if($user->celular!=null and $user->celular!=''){
 
-                        $number = '57'.$user->celular;
+                        /*$number = '57'.$user->celular;
 
                         $ch = curl_init();
 
@@ -1385,7 +1385,7 @@ class ViajesController extends Controller
                         ));
 
                         $response = curl_exec($ch);
-                        curl_close($ch);
+                        curl_close($ch);*/
 
                     }
 
@@ -1412,7 +1412,7 @@ class ViajesController extends Controller
                     
                     if($pass->correo!='' and $pass->correo!=null){
 
-                        if (filter_var($pass->correo, FILTER_VALIDATE_EMAIL)) {
+                        /*if (filter_var($pass->correo, FILTER_VALIDATE_EMAIL)) {
                             
                             $data = [
                                 'servicio' => $viaje
@@ -1427,7 +1427,7 @@ class ViajesController extends Controller
                                 $message->cc($emailcc);
                             });
 
-                        }
+                        }*/
 
                     }
 
@@ -1435,7 +1435,7 @@ class ViajesController extends Controller
 
                         $number = $pass->celular;
 
-                        $ch = curl_init();
+                        /*$ch = curl_init();
                         curl_setopt($ch, CURLOPT_URL, "https://graph.facebook.com/v15.0/109529185312847/messages");
                         curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
                         curl_setopt($ch, CURLOPT_HEADER, FALSE);
@@ -1468,7 +1468,7 @@ class ViajesController extends Controller
                         ));
 
                         $response = curl_exec($ch);
-                        curl_close($ch);
+                        curl_close($ch);*/
 
                     }
                     
