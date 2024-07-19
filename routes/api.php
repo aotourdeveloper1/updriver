@@ -60,11 +60,11 @@ Route::post('/login', function (Request $request) {
 
             }else{
         
-                //$user->tokens()->delete();
+                $user->tokens()->delete();
 
                 $token = $user->createToken('auth_token')->plainTextToken;
 
-                //Auth::logoutOtherDevices($request->password);
+                Auth::logoutOtherDevices($request->password);
                 
                 $update = DB::table('conductores')
                 ->where('id' , $user->id)
