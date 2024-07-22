@@ -79,7 +79,7 @@ class ViajesController extends Controller
         left join estados est on est.id = v.fk_estado 
         left join tipos t on t.id = v.tipo_traslado 
         left join tipos t2 on t2.id = v.tipo_ruta
-        WHERE `fk_conductor` = ".$id." AND v.fecha_viaje between '".$diaanterior."' and '".$diasiguiente."' AND v.estado_eliminacion is null and v.estado_papelera is null
+        WHERE `fk_conductor` = ".$id." AND v.fk_estado = 57 and v.fecha_viaje between '".$diaanterior."' and '".$diasiguiente."' AND v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
 
         //v.fk_estado = 57 and
@@ -882,8 +882,10 @@ class ViajesController extends Controller
         left join estados est on est.id = v.fk_estado 
         left join tipos t on t.id = v.tipo_traslado 
         left join tipos t2 on t2.id = v.tipo_ruta
-        WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje = '".$fecha."' AND v.fk_estado = 60 and v.estado_eliminacion is null and v.estado_papelera is null
+        WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje = '".$fecha."' and v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
+
+        //AND v.fk_estado = 60 
 
         $viajes = DB::select($consulta);
 
@@ -945,8 +947,10 @@ class ViajesController extends Controller
         left join estados est on est.id = v.fk_estado 
         left join tipos t on t.id = v.tipo_traslado 
         left join tipos t2 on t2.id = v.tipo_ruta
-        WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje between '".$fechaInicial."' AND '".$fechaFinal."' AND v.fk_estado = 60 and v.estado_eliminacion is null and v.estado_papelera is null
+        WHERE `fk_conductor` = ".$conductor_id." AND v.fecha_viaje between '".$fechaInicial."' AND '".$fechaFinal."' and v.estado_eliminacion is null and v.estado_papelera is null
         GROUP BY v.id order by v.fecha_viaje asc, v.hora_viaje asc";
+
+        //AND v.fk_estado = 60 
 
         $viajes = DB::select($consulta);
 
