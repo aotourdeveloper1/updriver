@@ -700,7 +700,7 @@ class ViajesController extends Controller
                     }
 
                     //envío de correo
-                    if($pass->correo!='' and $pass->correo!=null){
+                    /*if($pass->correo!='' and $pass->correo!=null){
 
                         if (filter_var($pass->correo, FILTER_VALIDATE_EMAIL)) {
 
@@ -728,7 +728,7 @@ class ViajesController extends Controller
 
                         }
 
-                    }
+                    }*/
 
                 }
 
