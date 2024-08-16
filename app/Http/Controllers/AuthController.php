@@ -91,7 +91,7 @@ class AuthController extends Controller
         $identificacionConductor = $request->identificacion_conductor;
 
         $conductor = DB::table('conductores')
-        ->select('id', 'primer_nombre', 'fk_proveedor', 'numero_documento')
+        ->select('id', 'primer_nombre', 'fk_proveedor', 'numero_documento', 'email', 'celular')
         ->where('fk_proveedor', $proveedor_id)
         ->where('numero_documento',$identificacionConductor)
         ->first();
@@ -172,7 +172,7 @@ class AuthController extends Controller
 
             return Response::json([
                 'response' => false,
-                'mensaje' => 'No se encontró ningún registró con tu número de cédula. <br>Valida la información e inténtalo de nuevo, o comunícate con servicio al cliente.'
+                'mensaje' => 'No se encontró ningún registro con tu número de cédula. <br>Valida la información e inténtalo de nuevo, o comunícate con servicio al cliente.'
             ]);
 
         }
